@@ -1,0 +1,1435 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智編一日 - 大學生通用智能排程控制台</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght=300;400;500;600;700&family=Noto+Sans+TC:wght=300;400;500;700;900&display=swap" rel="stylesheet">
+    <!-- FontAwesome 圖標庫 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js 圖表庫 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'Noto Sans TC', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#f5f3ff',
+                            100: '#ede9fe',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca',
+                            900: '#312e81',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans TC', 'sans-serif';
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            min-height: 100vh;
+        }
+        /* 自訂邊欄捲軸樣式 */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        /* 當前活動呼吸霓虹特效 */
+        @keyframes currentGlow {
+            0%, 100% { box-shadow: 0 0 5px rgba(244, 63, 94, 0.4), 0 0 15px rgba(244, 63, 94, 0.2); }
+            50% { box-shadow: 0 0 15px rgba(244, 63, 94, 0.8), 0 0 25px rgba(244, 63, 94, 0.4); }
+        }
+        .current-task-active {
+            animation: currentGlow 2.5s infinite ease-in-out;
+            border-color: #f43f5e !important;
+        }
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+            .print-card {
+                box-shadow: none !important;
+                border: 1px solid #e2e8f0 !important;
+                background: white !important;
+            }
+        }
+    </style>
+</head>
+<body class="text-slate-800 antialiased pb-12">
+
+    <header class="bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-0 z-50 transition-all duration-300">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="bg-gradient-to-tr from-brand-500 to-indigo-600 text-white p-2.5 rounded-xl shadow-lg shadow-brand-500/20">
+                    <i class="fa-solid fa-graduation-cap text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-base sm:text-lg font-bold tracking-tight text-slate-900 flex items-center gap-2">
+                        智編一日 <span class="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-medium">通用大學版</span>
+                    </h1>
+                    <p class="text-xs text-slate-500 hidden sm:block">自訂課表與活動・24小時制智慧排程・限制休息空檔不留白</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-2">
+                <!-- Date selector with dynamic Day-of-Week Badge -->
+                <div class="flex items-center space-x-2">
+                    <span class="text-xs font-semibold bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg border border-slate-200 flex items-center gap-1.5 shadow-sm">
+                        <i class="fa-regular fa-calendar text-indigo-500"></i>
+                        <input type="date" id="schedule-date" class="bg-transparent border-none font-bold text-slate-700 focus:outline-none cursor-pointer" onchange="onDateChange()">
+                        <span id="day-of-week-badge" class="text-[10px] bg-indigo-600 text-white px-2 py-0.5 rounded-md font-bold ml-1">週一</span>
+                    </span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8">
+            
+            <!-- Left Side: Inputs, Settings -->
+            <section class="lg:col-span-5 space-y-6 no-print">
+                
+                <!-- Tab Selector for Inputs -->
+                <div class="bg-white p-1.5 rounded-xl shadow-sm border border-slate-200 grid grid-cols-3 gap-1">
+                    <button onclick="switchTab('tab-settings')" id="btn-tab-settings" class="py-2 text-[10px] sm:text-xs font-bold rounded-lg transition duration-200 bg-brand-500 text-white shadow-sm text-center">
+                        <i class="fa-solid fa-gear block sm:inline sm:mr-0.5"></i>偏好
+                    </button>
+                    <button onclick="switchTab('tab-classes')" id="btn-tab-classes" class="py-2 text-[10px] sm:text-xs font-bold rounded-lg transition duration-200 text-slate-600 hover:bg-slate-100 text-center">
+                        <i class="fa-solid fa-book-bookmark block sm:inline sm:mr-0.5"></i>課表
+                    </button>
+                    <button onclick="switchTab('tab-activities')" id="btn-tab-activities" class="py-2 text-[10px] sm:text-xs font-bold rounded-lg transition duration-200 text-slate-600 hover:bg-slate-100 text-center">
+                        <i class="fa-solid fa-person-running block sm:inline sm:mr-0.5"></i>活動
+                    </button>
+                </div>
+
+                <!-- Tab: Settings -->
+                <div id="tab-settings" class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 transition-all">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-sm font-bold text-slate-950 flex items-center gap-2">
+                            <i class="fa-solid fa-sliders text-brand-500"></i>
+                            今日作息偏好 (00:00 - 23:59)
+                        </h2>
+                        <button onclick="resetBaseTimes()" class="text-xs text-slate-400 hover:text-slate-600 transition" title="重設為預設作息">
+                            <i class="fa-solid fa-rotate-left"></i> 重設
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 text-xs">
+                        <div>
+                            <label class="block text-slate-500 mb-1 font-medium">預設起床時間 (24H)</label>
+                            <div data-time-picker="base-wakeup" data-default="07:30"></div>
+                        </div>
+                        <div>
+                            <label class="block text-slate-500 mb-1 font-medium">預設就寢時間 (24H)</label>
+                            <div data-time-picker="base-sleep" data-default="23:30"></div>
+                        </div>
+                        <div class="col-span-2 border-t border-slate-100 my-1"></div>
+                        <div>
+                            <label class="block text-slate-500 mb-1 font-medium">預設早餐時間 (24H)</label>
+                            <div data-time-picker="base-breakfast" data-default="08:00"></div>
+                        </div>
+                        <div>
+                            <label class="block text-slate-500 mb-1 font-medium">預設午餐時間 (24H)</label>
+                            <div data-time-picker="base-lunch" data-default="12:00"></div>
+                        </div>
+                        <div class="col-span-2">
+                            <label class="block text-slate-500 mb-1 font-medium">預設晚餐時間 (24H)</label>
+                            <div data-time-picker="base-dinner" data-default="18:00"></div>
+                        </div>
+                    </div>
+                    <p class="text-[11px] text-slate-400 mt-3 italic"><i class="fa-solid fa-circle-info"></i> 系統支援跨子夜就寢（如 01:30），餐點若與課堂時間衝突，將會智慧延後或提前。</p>
+                </div>
+
+                <!-- Tab: Classes -->
+                <div id="tab-classes" class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 transition-all hidden">
+                    <div class="mb-4">
+                        <h2 class="text-sm font-bold text-slate-900 mb-1 flex items-center gap-2">
+                            <i class="fa-solid fa-file-lines text-indigo-500"></i>
+                            自訂今日固定課堂 / 事件 (24H)
+                        </h2>
+                        <p class="text-[11px] text-slate-500">請在此輸入您今天必須到場的上課時間、考試或會議。智慧演算法排程時會**絕對避開**這些時段。</p>
+                    </div>
+
+                    <form id="class-form" class="space-y-3" onsubmit="addClass(event)">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">課程 / 事件名稱 *</label>
+                            <input type="text" id="class-title" required placeholder="例如：普通生物學、導師會談、專題開會" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition">
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">開始時間 (24H) *</label>
+                                <div data-time-picker="class-start" data-default="09:00"></div>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">結束時間 (24H) *</label>
+                                <div data-time-picker="class-end" data-default="11:00"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">上課教室/地點 (備忘)</label>
+                            <input type="text" id="class-location" placeholder="例如：綜合教學大樓 302 教室" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition">
+                        </div>
+                        <button type="submit" class="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg text-xs transition shadow-sm flex items-center justify-center gap-1">
+                            <i class="fa-solid fa-plus text-[10px]"></i> 加入今日固定課堂
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Tab: Activities -->
+                <div id="tab-activities" class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 transition-all hidden">
+                    <h2 class="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
+                        <i class="fa-solid fa-list-check text-brand-500"></i>
+                        新增今日彈性日程 / 任務
+                    </h2>
+                    <form id="activity-form" class="space-y-3" onsubmit="addActivity(event)">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">活動/讀書主題 *</label>
+                            <input type="text" id="act-title" required placeholder="例如：寫化學報告、重訓健身、複習英文" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition">
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">預估時長 *</label>
+                                <select id="act-duration" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none transition">
+                                    <option value="30">30 分鐘</option>
+                                    <option value="45">45 分鐘</option>
+                                    <option value="60" selected>1 小時</option>
+                                    <option value="90">1.5 小時</option>
+                                    <option value="120">2 小時</option>
+                                    <option value="180">3 小時</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">性質 *</label>
+                                <select id="act-category" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none transition">
+                                    <option value="focus" selected>🧠 深度專注 (溫書/報告)</option>
+                                    <option value="physical">🏃 體能運動 (重訓/慢跑)</option>
+                                    <option value="relax">🍵 身心放鬆 (休閒/社團)</option>
+                                    <option value="errand">🧹 日常雜事 (採買/打掃)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">偏好時段</label>
+                            <div class="grid grid-cols-4 gap-1.5">
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="act-timing" value="any" checked class="sr-only peer">
+                                    <div class="text-center py-1.5 text-[11px] border border-slate-200 rounded-md peer-checked:bg-brand-50 peer-checked:border-brand-500 peer-checked:text-brand-700 hover:bg-slate-50 transition font-medium">任何</div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="act-timing" value="morning" class="sr-only peer">
+                                    <div class="text-center py-1.5 text-[11px] border border-slate-200 rounded-md peer-checked:bg-brand-50 peer-checked:border-brand-500 peer-checked:text-brand-700 hover:bg-slate-50 transition font-medium">早上</div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="act-timing" value="afternoon" class="sr-only peer">
+                                    <div class="text-center py-1.5 text-[11px] border border-slate-200 rounded-md peer-checked:bg-brand-50 peer-checked:border-brand-500 peer-checked:text-brand-700 hover:bg-slate-50 transition font-medium">下午</div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="act-timing" value="evening" class="sr-only peer">
+                                    <div class="text-center py-1.5 text-[11px] border border-slate-200 rounded-md peer-checked:bg-brand-50 peer-checked:border-brand-500 peer-checked:text-brand-700 hover:bg-slate-50 transition font-medium">晚上</div>
+                                </label>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">子任務/備忘 (逗號分隔，非必填)</label>
+                            <input type="text" id="act-subtasks" placeholder="例如：查文獻, 寫草稿, 統整目錄" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none transition">
+                        </div>
+                        <div class="flex items-center space-x-2 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                            <input type="checkbox" id="act-forceshift" class="rounded border-slate-300 text-brand-600 h-3.5 w-3.5">
+                            <label for="act-forceshift" class="text-[11px] text-slate-500 cursor-pointer select-none">
+                                <span class="font-semibold text-slate-700">高耗能警示</span>：完成此任務需大量放鬆
+                            </label>
+                        </div>
+                        <button type="submit" class="w-full py-2 bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-lg text-xs transition shadow-sm flex items-center justify-center gap-1">
+                            <i class="fa-solid fa-plus text-[10px]"></i> 加入彈性活動
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Dynamic Item List to arrange -->
+                <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200">
+                    <div class="flex items-center justify-between mb-3 border-b border-slate-100 pb-2">
+                        <h2 class="text-xs font-bold text-slate-900 flex items-center gap-1">
+                            <i class="fa-solid fa-list-check text-slate-400"></i>
+                            今日待排活動項目 (<span id="queue-count" class="text-brand-600">0</span>)
+                        </h2>
+                        <button onclick="clearQueue()" class="text-xs text-rose-500 hover:text-rose-700 transition">全部清空</button>
+                    </div>
+
+                    <!-- Empty state -->
+                    <div id="queue-empty-state" class="text-center py-6 px-4 border border-dashed border-slate-200 rounded-xl">
+                        <i class="fa-regular fa-calendar-plus text-slate-300 text-2xl mb-1.5"></i>
+                        <p class="text-[11px] text-slate-400">暫無待排活動，請點擊上方切換新增！</p>
+                    </div>
+
+                    <div id="queue-items-container" class="space-y-2 max-h-52 overflow-y-auto pr-1">
+                        <!-- Queue items render here -->
+                    </div>
+
+                    <div class="mt-4 pt-3 border-t border-slate-100 flex flex-col gap-2">
+                        <!-- Quick Add preset tags for College Students -->
+                        <div class="flex flex-wrap gap-1">
+                            <button onclick="quickAddActivity('📚 準備期末大會考', 120, 'focus', 'afternoon')" class="text-[10px] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-2 py-1 rounded-md border border-indigo-100 transition">📚 大考複習 (2h)</button>
+                            <button onclick="quickAddActivity('🧪 撰寫專科實驗預報', 90, 'focus', 'evening')" class="text-[10px] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-2 py-1 rounded-md border border-indigo-100 transition">🧪 實驗預報 (1.5h)</button>
+                            <button onclick="quickAddActivity('🏋️ 健身房重量訓練', 90, 'physical', 'afternoon')" class="text-[10px] bg-slate-100 text-slate-600 px-2 py-1 rounded-md border border-slate-200 hover:bg-slate-200 transition">🏋️ 重訓 (1.5h)</button>
+                            <button onclick="quickAddActivity('🧩 團隊簡報製作討論', 120, 'focus', 'afternoon')" class="text-[10px] bg-slate-100 text-slate-600 px-2 py-1 rounded-md border border-slate-200 hover:bg-slate-200 transition">🧩 簡報討論 (2h)</button>
+                        </div>
+                        
+                        <button onclick="generateSchedule()" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition shadow-md shadow-emerald-500/15 flex items-center justify-center gap-1.5">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> 開始智慧演算與排程
+                        </button>
+                    </div>
+                </div>
+
+            </section>
+
+            <!-- Right Side: The Smart Schedule -->
+            <section class="lg:col-span-7 space-y-6">
+                
+                <!-- Health Advisory Panel -->
+                <div id="health-warnings-panel" class="hidden bg-gradient-to-r from-rose-50 to-amber-50 border border-rose-200 rounded-2xl p-5 shadow-sm transition-all">
+                    <div class="flex items-start gap-3">
+                        <div class="bg-rose-500 text-white p-2 rounded-xl shadow-md">
+                            <i class="fa-solid fa-triangle-exclamation text-base"></i>
+                        </div>
+                        <div class="flex-1">
+                            <h3 class="font-bold text-rose-950 text-sm flex items-center gap-2">
+                                ⚠️ 偵測到極限作息安排！今日健康與改善建議
+                            </h3>
+                            <p class="text-[11px] text-rose-700/80 mt-0.5">行程已被 100% 強制排入，但部分時間可能重疊或過緊。請參考以下改善方案：</p>
+                            <ul id="health-warnings-list" class="mt-3 space-y-2 text-xs text-slate-700 list-disc pl-4">
+                                <!-- Dynamic warnings render here -->
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Time distribution visualization chart -->
+                <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80 transition-all">
+                    <h3 class="text-xs font-bold text-slate-950 mb-3 uppercase tracking-wider flex items-center gap-1.5">
+                        <i class="fa-solid fa-chart-pie text-indigo-500"></i> 今日時間配比與平衡分析 (24H制)
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                        <div class="md:col-span-5 flex justify-center">
+                            <div class="w-36 h-36">
+                                <canvas id="timeChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="md:col-span-7 space-y-1.5 text-xs text-slate-600">
+                            <p class="font-bold text-slate-900 mb-1">📊 時間健康度指標：</p>
+                            <div class="flex items-center justify-between border-b border-slate-50 pb-1">
+                                <span>🎯 高效學習 (課程 + 專注)：</span>
+                                <span id="stat-study" class="font-bold text-slate-800">0 小時</span>
+                            </div>
+                            <div class="flex items-center justify-between border-b border-slate-50 pb-1">
+                                <span>🏃 體能運動：</span>
+                                <span id="stat-exercise" class="font-bold text-slate-800">0 小時</span>
+                            </div>
+                            <div class="flex items-center justify-between border-b border-slate-50 pb-1">
+                                <span>🛌 睡眠修復：</span>
+                                <span id="stat-sleep" class="font-bold text-slate-800">0 小時</span>
+                            </div>
+                            <div class="flex items-center justify-between border-b border-slate-50 pb-1">
+                                <span>🍵 留白與生活：</span>
+                                <span id="stat-free" class="font-bold text-slate-800">0 小時</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Decisional Logs -->
+                <div id="intelligence-logs-container" class="hidden bg-indigo-50/50 border border-indigo-200/50 rounded-2xl p-4 text-xs text-indigo-950">
+                    <div class="flex items-start gap-2.5">
+                        <div class="bg-indigo-100 text-indigo-700 p-1 rounded-lg mt-0.5">
+                            <i class="fa-solid fa-brain"></i>
+                        </div>
+                        <div class="flex-1">
+                            <h3 class="font-bold text-indigo-950 mb-1">智編避讓決策報告</h3>
+                            <ul id="intelligence-logs" class="space-y-1 text-slate-700 pl-4 list-disc"></ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Main timeline display card -->
+                <div class="bg-white rounded-2xl p-5 sm:p-6 shadow-sm border border-slate-200/80 transition-all print-card">
+                    
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-3 mb-4 gap-2">
+                        <div>
+                            <h2 class="text-base font-bold text-slate-900 flex items-center gap-1.5">
+                                <i class="fa-solid fa-calendar-day text-indigo-500"></i>
+                                生活作息黃金時間軸 (24H格式)
+                            </h2>
+                            <p class="text-[11px] text-slate-500">自動避讓課堂並整合所有任務 (間隙不留白)</p>
+                        </div>
+                        <div class="flex items-center space-x-1.5 no-print">
+                            <button onclick="copyAsText()" class="px-2.5 py-1 text-xs bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-lg border border-slate-200 flex items-center gap-1 transition">
+                                <i class="fa-regular fa-clipboard"></i> 複製
+                            </button>
+                            <button onclick="window.print()" class="px-2.5 py-1 text-xs bg-brand-50 hover:bg-brand-100 text-brand-700 rounded-lg border border-brand-200 flex items-center gap-1 transition">
+                                <i class="fa-solid fa-print"></i> 列印
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Custom Alert Message (Toast) -->
+                    <div id="toast-message" class="hidden bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl p-3 mb-4 flex items-center justify-between transition-all duration-300">
+                        <span class="flex items-center gap-1.5"><i class="fa-solid fa-check-circle text-emerald-600"></i> <span id="toast-text">成功！</span></span>
+                        <button onclick="hideToast()" class="text-emerald-600 hover:text-emerald-950"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+
+                    <div id="schedule-empty" class="text-center py-16 px-4">
+                        <div class="text-slate-200 text-4xl mb-2">
+                            <i class="fa-solid fa-timeline"></i>
+                        </div>
+                        <h3 class="text-xs font-semibold text-slate-600 mb-1">今日尚無作息排程</h3>
+                        <p class="text-[11px] text-slate-400 max-w-xs mx-auto">請在左側自訂您的固定課堂、睡眠，並配置想做的事情，最後點擊「開始智慧演算與排程」生成今日作息表。</p>
+                    </div>
+
+                    <!-- Timeline Graphic -->
+                    <div id="schedule-timeline" class="hidden relative border-l-2 border-slate-100 ml-4 pl-6 sm:pl-8 space-y-5">
+                        <!-- Dynamic schedule list -->
+                    </div>
+
+                </div>
+
+            </section>
+
+        </div>
+    </main>
+
+    <!-- Custom Dialog (Modal) -->
+    <div id="info-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center hidden z-50 p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-5 shadow-xl border border-slate-100">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-2.5 mb-3">
+                <h3 class="text-sm font-bold text-slate-900 flex items-center gap-1.5" id="modal-title">提示</h3>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <p class="text-xs text-slate-600 leading-relaxed mb-4" id="modal-body"></p>
+            <div class="flex justify-end">
+                <button onclick="closeModal()" class="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs rounded-lg transition">確認</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const dayNameMap = {
+            1: "星期一",
+            2: "星期二",
+            3: "星期三",
+            4: "星期四",
+            5: "星期五",
+            6: "星期六",
+            0: "星期日"
+        };
+
+        // Data Structures
+        let items = []; // Holds custom classes & activities for selected date
+        let checkedSubtasks = {}; // Holds persistence for checked subtasks state
+        let chartInstance = null; // ChartJS instance
+
+        // Helper: Initialize 24-Hour Custom Dropdown Time Pickers
+        function initTimePickers() {
+            const pickers = document.querySelectorAll('[data-time-picker]');
+            pickers.forEach(p => {
+                const id = p.getAttribute('data-time-picker');
+                p.className = "flex items-center space-x-1 w-full justify-start";
+                
+                // Create Hour select
+                const hSelect = document.createElement('select');
+                hSelect.id = id + '-h';
+                hSelect.className = "w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition text-xs font-mono";
+                for (let h = 0; h < 24; h++) {
+                    const val = h.toString().padStart(2, '0');
+                    const opt = new Option(val, val);
+                    hSelect.add(opt);
+                }
+
+                // Create Separator
+                const sep = document.createElement('span');
+                sep.innerText = ":";
+                sep.className = "text-slate-400 font-bold px-1";
+
+                // Create Minute select
+                const mSelect = document.createElement('select');
+                mSelect.id = id + '-m';
+                mSelect.className = "w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition text-xs font-mono";
+                for (let m = 0; m < 60; m++) {
+                    const val = m.toString().padStart(2, '0');
+                    const opt = new Option(val, val);
+                    mSelect.add(opt);
+                }
+
+                p.appendChild(hSelect);
+                p.appendChild(sep);
+                p.appendChild(mSelect);
+
+                // Set default
+                const defVal = p.getAttribute('data-default') || '00:00';
+                setTimeValue(id, defVal);
+            });
+        }
+
+        // Helper to get time string 'HH:MM' from the dual-select components
+        function getTimeValue(id) {
+            const hEl = document.getElementById(id + '-h');
+            const mEl = document.getElementById(id + '-m');
+            if (hEl && mEl) {
+                return `${hEl.value}:${mEl.value}`;
+            }
+            return '00:00';
+        }
+
+        // Helper to set time 'HH:MM' into dual-select components
+        function setTimeValue(id, timeStr) {
+            if (!timeStr) return;
+            const [h, m] = timeStr.split(':');
+            const hEl = document.getElementById(id + '-h');
+            const mEl = document.getElementById(id + '-m');
+            if (hEl && mEl) {
+                hEl.value = h.padStart(2, '0');
+                mEl.value = m.padStart(2, '0');
+            }
+        }
+
+        window.onload = function() {
+            // First initialize UI picker dropdowns
+            initTimePickers();
+
+            // Set default date to today
+            const todayStr = new Date().toISOString().split('T')[0];
+            document.getElementById('schedule-date').value = todayStr;
+
+            // Trigger data load & rendering
+            onDateChange();
+
+            // Keep "current running task" pulsing card accurate every minute
+            setInterval(() => {
+                const blocks = computedScheduleForAI;
+                if (blocks && blocks.length > 0) {
+                    renderScheduleUI(blocks, []); 
+                }
+            }, 60000);
+        };
+
+        function onDateChange() {
+            const dateStr = document.getElementById('schedule-date').value;
+            if (!dateStr) return;
+
+            const dateObj = new Date(dateStr);
+            const dayOfWeek = dateObj.getDay(); // 0-6
+
+            document.getElementById('day-of-week-badge').innerText = dayNameMap[dayOfWeek];
+
+            // Load day specific inputs
+            const savedItems = localStorage.getItem(`smart_schedule_items_${dateStr}`);
+            const savedSubtasks = localStorage.getItem(`smart_schedule_subtasks_${dateStr}`);
+            const savedWake = localStorage.getItem(`smart_schedule_wake_${dateStr}`);
+            const savedSleep = localStorage.getItem(`smart_schedule_sleep_${dateStr}`);
+            const savedBreakfast = localStorage.getItem(`smart_schedule_breakfast_${dateStr}`);
+            const savedLunch = localStorage.getItem(`smart_schedule_lunch_${dateStr}`);
+            const savedDinner = localStorage.getItem(`smart_schedule_dinner_${dateStr}`);
+
+            if (savedItems) {
+                try { items = JSON.parse(savedItems); } catch(e) { items = []; }
+            } else {
+                // Ensure daily elastic task list starts completely fresh and empty
+                items = [];
+            }
+
+            if (savedSubtasks) {
+                try { checkedSubtasks = JSON.parse(savedSubtasks); } catch(e) { checkedSubtasks = {}; }
+            } else {
+                checkedSubtasks = {};
+            }
+
+            // Synchronize base preferences in UI dropdown pickers
+            setTimeValue('base-wakeup', savedWake || '07:30');
+            setTimeValue('base-sleep', savedSleep || '23:30');
+            setTimeValue('base-breakfast', savedBreakfast || '08:00');
+            setTimeValue('base-lunch', savedLunch || '12:00');
+            setTimeValue('base-dinner', savedDinner || '18:00');
+
+            updateQueueUI();
+            initChart();
+            generateSchedule();
+        }
+
+        function saveToLocalStorage() {
+            const dateStr = document.getElementById('schedule-date').value;
+            if (!dateStr) return;
+
+            localStorage.setItem(`smart_schedule_items_${dateStr}`, JSON.stringify(items));
+            localStorage.setItem(`smart_schedule_subtasks_${dateStr}`, JSON.stringify(checkedSubtasks));
+            localStorage.setItem(`smart_schedule_wake_${dateStr}`, getTimeValue('base-wakeup'));
+            localStorage.setItem(`smart_schedule_sleep_${dateStr}`, getTimeValue('base-sleep'));
+            localStorage.setItem(`smart_schedule_breakfast_${dateStr}`, getTimeValue('base-breakfast'));
+            localStorage.setItem(`smart_schedule_lunch_${dateStr}`, getTimeValue('base-lunch'));
+            localStorage.setItem(`smart_schedule_dinner_${dateStr}`, getTimeValue('base-dinner'));
+        }
+
+        function switchTab(tabId) {
+            document.getElementById('tab-settings').classList.add('hidden');
+            document.getElementById('tab-classes').classList.add('hidden');
+            document.getElementById('tab-activities').classList.add('hidden');
+            
+            document.getElementById('btn-tab-settings').className = 'py-2 text-[10px] sm:text-xs font-bold rounded-lg transition duration-200 text-slate-600 hover:bg-slate-100 text-center';
+            document.getElementById('btn-tab-classes').className = 'py-2 text-[10px] sm:text-xs font-bold rounded-lg transition duration-200 text-slate-600 hover:bg-slate-100 text-center';
+            document.getElementById('btn-tab-activities').className = 'py-2 text-[10px] sm:text-xs font-bold rounded-lg transition duration-200 text-slate-600 hover:bg-slate-100 text-center';
+
+            document.getElementById(tabId).classList.remove('hidden');
+            document.getElementById('btn-' + tabId).className = 'py-2 text-[10px] sm:text-xs font-bold rounded-lg transition duration-200 bg-brand-500 text-white shadow-sm text-center';
+        }
+
+        function addClass(e) {
+            e.preventDefault();
+            const title = document.getElementById('class-title').value;
+            const start = getTimeValue('class-start');
+            const end = getTimeValue('class-end');
+            const location = document.getElementById('class-location').value;
+
+            if (timeToMin(start) >= timeToMin(end)) {
+                openModal("時間衝突", "結束時間必須晚於開始時間！");
+                return;
+            }
+
+            items.push({
+                id: 'c_' + Math.random().toString(36).substr(2, 9),
+                type: 'class',
+                title: '🎓 ' + title,
+                start: start,
+                end: end,
+                location: location || "自主研討室"
+            });
+
+            document.getElementById('class-title').value = '';
+            setTimeValue('class-start', '09:00');
+            setTimeValue('class-end', '11:00');
+            document.getElementById('class-location').value = '';
+
+            saveToLocalStorage();
+            updateQueueUI();
+            showToast(`已手動增添固定日程：「${title}」`);
+        }
+
+        function addActivity(e) {
+            e.preventDefault();
+            const title = document.getElementById('act-title').value;
+            const duration = parseInt(document.getElementById('act-duration').value);
+            const category = document.getElementById('act-category').value;
+            const timing = document.querySelector('input[name="act-timing"]:checked').value;
+            const subtaskText = document.getElementById('act-subtasks').value;
+            const forceshift = document.getElementById('act-forceshift').checked;
+
+            const subtasks = subtaskText ? subtaskText.split(',').map(s => s.trim()).filter(Boolean) : [];
+
+            items.push({
+                id: 'a_' + Math.random().toString(36).substr(2, 9),
+                type: 'activity',
+                title: title,
+                duration: duration,
+                category: category,
+                timing: timing,
+                forceshift: forceshift,
+                subtasks: subtasks
+            });
+
+            document.getElementById('act-title').value = '';
+            document.getElementById('act-subtasks').value = '';
+            document.getElementById('act-forceshift').checked = false;
+
+            saveToLocalStorage();
+            updateQueueUI();
+            showToast(`已加入彈性待排項目：「${title}」`);
+        }
+
+        function quickAddActivity(title, duration, category, timing) {
+            items.push({
+                id: 'a_' + Math.random().toString(36).substr(2, 9),
+                type: 'activity',
+                title: title,
+                duration: duration,
+                category: category,
+                timing: timing,
+                forceshift: false,
+                subtasks: []
+            });
+            saveToLocalStorage();
+            updateQueueUI();
+            showToast(`快速新增彈性項目：「${title}」`);
+        }
+
+        function deleteItem(id) {
+            items = items.filter(i => i.id !== id);
+            saveToLocalStorage();
+            updateQueueUI();
+            showToast('已移除該項目。');
+        }
+
+        function clearQueue() {
+            items = [];
+            checkedSubtasks = {};
+            saveToLocalStorage();
+            updateQueueUI();
+            showToast('已清空今日所有自訂日程。');
+        }
+
+        function updateQueueUI() {
+            const container = document.getElementById('queue-items-container');
+            const emptyState = document.getElementById('queue-empty-state');
+            const countBadge = document.getElementById('queue-count');
+
+            countBadge.innerText = items.length;
+
+            if (items.length === 0) {
+                container.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+            container.innerHTML = items.map(item => {
+                if (item.type === 'class') {
+                    return `
+                        <div class="flex items-center justify-between p-2.5 bg-indigo-50/50 border border-indigo-100 rounded-xl">
+                            <div class="min-w-0 flex items-center space-x-2">
+                                <span class="text-xs">📅</span>
+                                <div class="min-w-0">
+                                    <p class="text-xs font-bold text-indigo-950 truncate">${item.title}</p>
+                                    <p class="text-[10px] text-indigo-700 font-medium">${item.start} - ${item.end} @ ${item.location}</p>
+                                </div>
+                            </div>
+                            <button onclick="deleteItem('${item.id}')" class="text-slate-400 hover:text-rose-500 p-1.5 transition">
+                                <i class="fa-regular fa-trash-can text-xs"></i>
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    let badgeColor = "bg-slate-100 text-slate-700";
+                    let emoji = "💡";
+                    switch(item.category) {
+                        case 'focus': badgeColor = "bg-blue-50 text-blue-700 border-blue-100"; emoji = "🧠"; break;
+                        case 'physical': badgeColor = "bg-emerald-50 text-emerald-700 border-emerald-100"; emoji = "🏃"; break;
+                        case 'relax': badgeColor = "bg-purple-50 text-purple-700 border-purple-100"; emoji = "🧘"; break;
+                        case 'errand': badgeColor = "bg-slate-50 text-slate-700 border-slate-200"; emoji = "🧹"; break;
+                    }
+                    return `
+                        <div class="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-200/80 rounded-xl">
+                            <div class="min-w-0 flex items-center space-x-2">
+                                <span class="text-xs">${emoji}</span>
+                                <div class="min-w-0">
+                                    <p class="text-xs font-bold text-slate-800 truncate">${item.title}</p>
+                                    <p class="text-[10px] text-slate-400">
+                                        ${item.duration}m | <span class="px-1 rounded border ${badgeColor} text-[9px] font-bold">${item.category.toUpperCase()}</span>
+                                        ${item.subtasks?.length ? `(${item.subtasks.length} 子工作)` : ''}
+                                    </p>
+                                </div>
+                            </div>
+                            <button onclick="deleteItem('${item.id}')" class="text-slate-400 hover:text-rose-500 p-1.5 transition">
+                                <i class="fa-regular fa-trash-can text-xs"></i>
+                            </button>
+                        </div>
+                    `;
+                }
+            }).join('');
+        }
+
+        function timeToMin(timeStr) {
+            const [h, m] = timeStr.split(':').map(Number);
+            return h * 60 + m;
+        }
+
+        function minToTime(minutes) {
+            const h = Math.floor((minutes % 1440) / 60);
+            const m = Math.floor(minutes % 60);
+            return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+        }
+
+        function getActivityExplanation(category, title, startMin) {
+            const hour = Math.floor((startMin % 1440) / 60);
+            const timeStr = minToTime(startMin);
+            let reason = "";
+            
+            switch (category) {
+                case 'focus':
+                    if (hour >= 6 && hour < 12) {
+                        reason = `安排在早晨 ${timeStr} 是一天中前額葉能量最飽滿的「黃金專注期」，皮質醇濃度高，最適合邏輯思考、高難度學習，效率可提升兩倍。`;
+                    } else if (hour >= 12 && hour < 17) {
+                        reason = `下午 ${timeStr} 是避開午睡昏沈後的第二專注高峰期。適合報告撰寫、程式除錯或專案小組討論等中高難度任務。`;
+                    } else if (hour >= 17 && hour < 22) {
+                        reason = `晚上 ${timeStr} 環境安靜、干擾源極少。適合心無旁鶩地進行複習、整理課堂筆記或統整當日學習記憶。`;
+                    } else {
+                        reason = `此任務排在深夜 ${timeStr}。雖然環境安靜，但因大腦運作已飽和，建議以概念回想為主，避免硬記強背，防範大腦過度疲勞。`;
+                    }
+                    break;
+                case 'physical':
+                    if (hour >= 15 && hour < 19) {
+                        reason = `下午 15:00-19:00（今日排定為 ${timeStr}）是人體核心體溫、心肺功能及關節靈活度達最高峰的時間，運動成效最顯著且不易受傷。`;
+                    } else if (hour >= 6 && hour < 12) {
+                        reason = `早晨 ${timeStr} 進行運動能迅速喚醒神經系統，促進內啡肽分泌，有效拉高一整天的基礎代謝率與讀書精神。`;
+                    } else {
+                        reason = `安排在晚間 ${timeStr} 可釋放課業壓力。注意運動後心率較快，請在睡前保留 1.5 小時的靜態放鬆冷卻期，以防干擾深睡眠。`;
+                    }
+                    break;
+                case 'relax':
+                    if (hour >= 18) {
+                        reason = `排在晚間 ${timeStr} 接近一日尾聲。能順利啟動副交感神經，幫助身心從日間緊繃的課業模式切換至休息模式，對提升睡眠品質極有幫助。`;
+                    } else {
+                        reason = `在 ${timeStr} 課堂空檔穿插放鬆，可以中斷大腦的持續性壓力累積（認知飽和），預防下半天的拖延與讀書倦怠（Burnout）。`;
+                    }
+                    break;
+                case 'errand':
+                    reason = `日常瑣事與雜物（排於 ${timeStr}）消耗的腦力極低。安排在此，可做為完美的「活動型緩衝區」，順便起身活動筋骨、促進血液循環。`;
+                    break;
+                default:
+                    reason = `此活動排於 ${timeStr}，符合當下可用時間分配。`;
+            }
+            return reason;
+        }
+
+        function getRestSuggestion(prevBlock, nextBlock) {
+            let suggestion = "";
+            const prevCat = prevBlock ? prevBlock.category : null;
+            const nextCat = nextBlock ? nextBlock.category : null;
+            
+            if (prevCat === 'class' || prevCat === 'focus') {
+                suggestion = "您剛結束了一段高強度的大腦運作（課堂/深度專注）。";
+                if (nextCat === 'class' || nextCat === 'focus') {
+                    suggestion += " 💡 **黃金放空法：** 建議進行**「無螢幕放空」**，千萬別看 Reels/短片。閉目養神 5 分鐘或做 3 次深呼吸，重置前額葉精力。";
+                } else if (nextCat === 'physical') {
+                    suggestion += " 💡 **運動前置法：** 建議**「吃點高能小零食（如香蕉、燕麥）」**，補充足夠的即時肝醣，並做簡單拉伸，為接下來的激烈活動做好熱身。";
+                } else if (nextCat === 'meal') {
+                    suggestion += " 💡 **餐前放鬆法：** 建議**「洗把臉、站立大伸展」**，大腦停止運作並轉換心情，準備以放鬆愉悅的狀態享用美食。";
+                } else {
+                    suggestion += " 💡 **護眼調節法：** 建議眼睛遠視窗外 20 秒，轉動肩膀與頸部，舒緩久坐帶來的肩頸僵硬。";
+                }
+            } else if (prevCat === 'physical') {
+                suggestion = "您剛完成了體能鍛鍊，肌肉處於充血微損狀態且水分流失。";
+                suggestion += " 💡 **運動修復法：** 建議立刻**「補充 300ml 的水分或電解質」**，做一些**「靜態大腿伸展」**，並在接下來的半小時內安排高蛋白食物。";
+            } else if (prevCat === 'meal') {
+                suggestion = "您剛享用完美味的餐點，血液大量集中至胃部進行消化，大腦易產生食物昏迷（Food Coma）。";
+                suggestion += " 💡 **防昏睡大法：** 建議**「站立或散步 15 分鐘」**，去洗碗、整理桌面或在走廊走動。**絕對避免立刻趴下或躺下**，防範胃食道逆流並促進代謝。";
+            } else {
+                suggestion = "這是一段簡短的作息過渡。";
+                if (nextCat === 'sleep') {
+                    suggestion += " 💡 **睡前降溫法：** 建議**「調暗房內燈光、遠離 3C 螢幕」**，讀幾頁紙本書或靜坐冥想，促進褪黑激素分泌，拉長深睡眠。";
+                } else {
+                    suggestion += " 💡 **水分補給法：** 建議**「喝一杯溫水」**，起身走走，避免久坐造成的血液淤積，維持靈活充沛的身體狀態。";
+                }
+            }
+            return suggestion;
+        }
+
+        let computedScheduleForAI = []; 
+
+        function generateSchedule() {
+            const decisionLogs = [];
+            const healthWarnings = [];
+
+            let wakeMin = timeToMin(getTimeValue('base-wakeup'));
+            let sleepMin = timeToMin(getTimeValue('base-sleep'));
+            let breakfastMin = timeToMin(getTimeValue('base-breakfast'));
+            let lunchMin = timeToMin(getTimeValue('base-lunch'));
+            let dinnerMin = timeToMin(getTimeValue('base-dinner'));
+
+            saveToLocalStorage();
+
+            let mealDurations = { breakfast: 30, lunch: 40, dinner: 45 }; 
+
+            const classes = items.filter(i => i.type === 'class');
+            let elasticActivities = items.filter(i => i.type === 'activity');
+
+            const checkOverlaps = (startA, endA, startB, endB) => {
+                return Math.max(startA, startB) < Math.min(endA, endB);
+            };
+
+            // Pass 1: Resolve overlaps of "Classes" with "Meals"
+            classes.forEach(c => {
+                const cStart = timeToMin(c.start);
+                const cEnd = timeToMin(c.end);
+
+                // Breakfast conflict
+                if (checkOverlaps(breakfastMin, breakfastMin + mealDurations.breakfast, cStart, cEnd)) {
+                    breakfastMin = cEnd + 5; 
+                    decisionLogs.push(`🍴 早餐時段與固定課堂「${c.title}」衝突，已自動順延至下課後的 ${minToTime(breakfastMin)}。`);
+                }
+                // Lunch conflict
+                if (checkOverlaps(lunchMin, lunchMin + mealDurations.lunch, cStart, cEnd)) {
+                    if (cStart - mealDurations.lunch >= wakeMin) {
+                        lunchMin = cStart - mealDurations.lunch - 5;
+                        decisionLogs.push(`🍴 午餐已因課程關係提前至上課前的 ${minToTime(lunchMin)} 享用。`);
+                    } else {
+                        lunchMin = cEnd + 5;
+                        decisionLogs.push(`🍴 因中午時間有安排固定行程，午餐智慧延後至 ${minToTime(lunchMin)}。`);
+                    }
+                }
+                // Dinner conflict
+                if (checkOverlaps(dinnerMin, dinnerMin + mealDurations.dinner, cStart, cEnd)) {
+                    dinnerMin = cEnd + 5;
+                    decisionLogs.push(`🍴 傍晚固定課程/事件衝突，晚餐已智慧順延至下課後的 ${minToTime(dinnerMin)}。`);
+                }
+            });
+
+            let blocks = [];
+
+            // Add Sleep Block dynamically supporting 24H Over-Midnight logic
+            if (sleepMin > wakeMin) {
+                blocks.push({ start: 0, end: wakeMin, category: 'sleep', title: '睡眠 (生理修復期)', explanation: '' });
+                blocks.push({ start: sleepMin, end: 1440, category: 'sleep', title: '睡眠 (生理修復期)', explanation: '' });
+            } else {
+                blocks.push({ start: sleepMin, end: wakeMin, category: 'sleep', title: '睡眠 (生理修復期)', explanation: '' });
+                decisionLogs.push(`🛌 偵測到深夜跨日就寢偏好 (${minToTime(sleepMin)})。今日睡眠安排於凌晨 ${minToTime(sleepMin)} - 上午 ${minToTime(wakeMin)}。`);
+            }
+
+            // Add Meals
+            blocks.push({ start: breakfastMin, end: breakfastMin + mealDurations.breakfast, category: 'meal', title: '健康早餐', explanation: '' });
+            blocks.push({ start: lunchMin, end: lunchMin + mealDurations.lunch, category: 'meal', title: '美味午餐', explanation: '' });
+            blocks.push({ start: dinnerMin, end: dinnerMin + mealDurations.dinner, category: 'meal', title: '營養晚餐', explanation: '' });
+
+            // Add Fixed Classes / Events
+            classes.forEach(c => {
+                blocks.push({
+                    start: timeToMin(c.start),
+                    end: timeToMin(c.end),
+                    category: 'class',
+                    title: c.title,
+                    location: c.location,
+                    explanation: ''
+                });
+            });
+
+            const getFreeWindows = (tempBlocks) => {
+                let sorted = [...tempBlocks].sort((a, b) => a.start - b.start);
+                let free = [];
+                for (let i = 0; i < sorted.length - 1; i++) {
+                    if (sorted[i+1].start > sorted[i].end) {
+                        free.push({
+                            start: sorted[i].end,
+                            end: sorted[i+1].start,
+                            duration: sorted[i+1].start - sorted[i].end
+                        });
+                    }
+                }
+                return free;
+            };
+
+            const isHighIntensity = (act) => act.forceshift === true || act.category === 'physical';
+
+            const scoreSlotForActivity = (act, testStart, testEnd, currentBlocks) => {
+                let score = 100;
+
+                // Rest constraint implementation: Avoid huge gaps.
+                let minDistanceToNeighbor = 1440;
+                currentBlocks.forEach(b => {
+                    if (b.category === 'sleep' && b.start === 0) return; 
+                    if (b.category === 'sleep' && b.end === 1440) return; 
+                    
+                    let distBefore = Math.abs(testStart - b.end);
+                    let distAfter = Math.abs(b.start - testEnd);
+                    let minDist = Math.min(distBefore, distAfter);
+                    if (minDist < minDistanceToNeighbor) {
+                        minDistanceToNeighbor = minDist;
+                    }
+                });
+
+                // Target Gap Rule: 嚴格控制休息間隙在 30 分鐘內 (高強度活動放寬至 1 小時)
+                const maxAllowedGap = isHighIntensity(act) ? 60 : 30;
+                if (minDistanceToNeighbor > maxAllowedGap) {
+                    score -= (minDistanceToNeighbor - maxAllowedGap) * 1.5; 
+                } else {
+                    score += (maxAllowedGap - minDistanceToNeighbor); 
+                }
+
+                if (act.timing === 'morning') {
+                    if (testStart < wakeMin || testEnd > lunchMin) score -= 100;
+                }
+                if (act.timing === 'afternoon') {
+                    if (testStart < (lunchMin + mealDurations.lunch) || testEnd > dinnerMin) score -= 100;
+                }
+                if (act.timing === 'evening') {
+                    let limitEnd = (sleepMin > wakeMin) ? sleepMin : 1440;
+                    if (testStart < (dinnerMin + mealDurations.dinner) || testEnd > limitEnd) score -= 100;
+                }
+
+                if (act.category === 'focus') {
+                    if (testStart >= wakeMin + 60 && testEnd <= lunchMin) score += 40;
+                    else if (testStart >= (lunchMin + mealDurations.lunch + 30) && testEnd <= dinnerMin) score += 20;
+                } else if (act.category === 'physical') {
+                    if (testStart >= dinnerMin - 120 && testEnd <= dinnerMin) score += 50;
+                }
+
+                return score;
+            };
+
+            elasticActivities.sort((a, b) => {
+                const aPref = a.timing !== 'any' ? 2 : 1;
+                const bPref = b.timing !== 'any' ? 2 : 1;
+                return bPref - aPref;
+            });
+
+            let unscheduled = [];
+
+            elasticActivities.forEach(act => {
+                let freeWindows = getFreeWindows(blocks);
+                let bestStart = -1;
+                let bestScore = -9999;
+
+                freeWindows.forEach(win => {
+                    if (win.duration < act.duration) return;
+
+                    for (let start = win.start; start <= win.end - act.duration; start += 15) {
+                        let score = scoreSlotForActivity(act, start, start + act.duration, blocks);
+                        if (score > bestScore) {
+                            bestScore = score;
+                            bestStart = start;
+                        }
+                    }
+                });
+
+                if (bestStart !== -1 && bestScore > -200) {
+                    const explanation = getActivityExplanation(act.category, act.title, bestStart);
+                    blocks.push({
+                        start: bestStart,
+                        end: bestStart + act.duration,
+                        category: act.category,
+                        title: act.title,
+                        forceshift: act.forceshift,
+                        subtasks: act.subtasks || [],
+                        explanation: explanation
+                    });
+                } else {
+                    unscheduled.push(act);
+                }
+            });
+
+            if (unscheduled.length > 0) {
+                decisionLogs.push(`⚠️ <strong>行程過多！</strong> 啟用極限強排演算法，確保所有任務今天完成。`);
+                
+                unscheduled.forEach(act => {
+                    let freeWindows = getFreeWindows(blocks);
+                    let bestStart = -1;
+                    
+                    freeWindows.forEach(win => {
+                        if (win.duration >= act.duration && bestStart === -1) {
+                            bestStart = win.start;
+                        }
+                    });
+
+                    if (bestStart === -1) {
+                        let sleepBlockIndex = blocks.findIndex(b => b.category === 'sleep' && b.start >= 1200);
+                        if (sleepBlockIndex !== -1) {
+                            let originalSleepStart = blocks[sleepBlockIndex].start;
+                            
+                            blocks[sleepBlockIndex].start = originalSleepStart + act.duration;
+                            if (blocks[sleepBlockIndex].start > 1440) blocks[sleepBlockIndex].start = 1440; 
+                            
+                            bestStart = originalSleepStart; 
+                            healthWarnings.push(`🛌 因強行排入「${act.title}」，<strong>就寢時間已自動延後至 ${minToTime(originalSleepStart + act.duration)}</strong>。這將會壓縮睡眠，建議提早拆解此任務。`);
+                        } else {
+                            bestStart = 1320; 
+                        }
+                    }
+
+                    blocks.forEach(b => {
+                        if (b.category === 'meal' && checkOverlaps(bestStart, bestStart + act.duration, b.start, b.end)) {
+                            healthWarnings.push(`🍴 「${act.title}」與您的用餐時段發生重疊。建議微調該項目以保障健康的飲食生活。`);
+                        }
+                    });
+
+                    const explanation = `⚠️ 強排警告：此行程因空檔不足被強制安插。\n💡 排程理由：${getActivityExplanation(act.category, act.title, bestStart)}`;
+                    blocks.push({
+                        start: bestStart,
+                        end: bestStart + act.duration,
+                        category: act.category,
+                        title: act.title,
+                        forceshift: act.forceshift,
+                        subtasks: act.subtasks || [],
+                        explanation: explanation
+                    });
+                });
+            }
+
+            // Fill empty gaps with micro-breaks or flexible blanks
+            let finalFree = getFreeWindows(blocks);
+            finalFree.forEach(win => {
+                let duration = win.end - win.start;
+                if (duration < 5) return; 
+
+                let title = duration <= 30 ? "課間微休息 / 水分補充" : "彈性自主留白區";
+                blocks.push({
+                    start: win.start,
+                    end: win.end,
+                    category: 'free',
+                    title: title,
+                    explanation: '' 
+                });
+            });
+
+            blocks.sort((a, b) => a.start - b.start);
+
+            // Generate contextual recommendations for empty gaps based on adjacent blocks
+            for (let i = 0; i < blocks.length; i++) {
+                if (blocks[i].category === 'free') {
+                    const prevBlock = i > 0 ? blocks[i-1] : null;
+                    const nextBlock = i < blocks.length - 1 ? blocks[i+1] : null;
+                    blocks[i].explanation = getRestSuggestion(prevBlock, nextBlock);
+                }
+            }
+
+            computedScheduleForAI = blocks;
+
+            evaluateHealthAndRenderSuggestions(blocks, healthWarnings);
+            renderScheduleUI(blocks, decisionLogs);
+            updateStatsAndChart(blocks);
+        }
+
+        function evaluateHealthAndRenderSuggestions(blocks, existingWarnings) {
+            const warningPanel = document.getElementById('health-warnings-panel');
+            const listContainer = document.getElementById('health-warnings-list');
+            
+            let warnings = [...existingWarnings];
+            
+            let totalSleepMin = 0;
+            let totalFocusMin = 0;
+            let backToBackFocusCount = 0;
+            let hasLateNightPhysical = false;
+
+            for (let i = 0; i < blocks.length; i++) {
+                let b = blocks[i];
+                let duration = b.end - b.start;
+                if (b.category === 'sleep') totalSleepMin += duration;
+                if (b.category === 'focus' || b.category === 'class') totalFocusMin += duration;
+                
+                if (i < blocks.length - 1) {
+                    let nextB = blocks[i+1];
+                    let gap = nextB.start - b.end;
+                    if ((b.category === 'focus' || b.category === 'class') && 
+                        (nextB.category === 'focus' || nextB.category === 'class') && 
+                        gap <= 10) {
+                        backToBackFocusCount++;
+                    }
+                }
+                if (b.category === 'physical' && b.start >= 1200) { 
+                    hasLateNightPhysical = true;
+                }
+            }
+
+            if (totalSleepMin < 360) { 
+                warnings.push(`🛌 <strong>黃金睡眠赤字：</strong> 今日睡眠時長低於 6 小時。大腦可能無法完全排除代謝廢物，會影響到隔天記憶鞏固，建議減少部分彈性活動。`);
+            }
+            if (totalFocusMin > 480) { 
+                warnings.push(`🧠 <strong>大腦高負荷警告：</strong> 今日學習/大腦專注高達 ${(totalFocusMin/60).toFixed(1)} 小時。前額葉在大強度燃燒後容易疲憊，建議晚上活動轉為被動式休閒。`);
+            }
+            if (backToBackFocusCount >= 2) {
+                warnings.push(`⏱️ <strong>過度緊貼安排：</strong> 今日有多次無縫接軌的高強度活動。大腦在任務切換時缺乏緩衝，建議務必手動安排至少 10 分鐘做伸展與深呼吸。`);
+            }
+            if (hasLateNightPhysical) {
+                warnings.push(`⚡ <strong>夜間高能運動：</strong> 晚上 8 點後進行激烈體能訓練會使交感神經過度興奮，進而打亂深睡眠。運動後建議泡熱水腳或做靜態拉伸以降溫。`);
+            }
+
+            if (warnings.length > 0) {
+                warningPanel.classList.remove('hidden');
+                listContainer.innerHTML = warnings.map(w => `<li class="leading-relaxed text-slate-800">${w}</li>`).join('');
+            } else {
+                warningPanel.classList.add('hidden');
+                listContainer.innerHTML = '';
+            }
+        }
+
+        function toggleSubtaskState(blockIndex, subtaskIndex, elementId) {
+            const isChecked = document.getElementById(elementId).checked;
+            const subtaskKey = `${blockIndex}_${subtaskIndex}`;
+            
+            if (isChecked) {
+                checkedSubtasks[subtaskKey] = true;
+            } else {
+                delete checkedSubtasks[subtaskKey];
+            }
+            
+            saveToLocalStorage();
+        }
+
+        function renderScheduleUI(blocks, logs) {
+            const container = document.getElementById('schedule-timeline');
+            const emptyState = document.getElementById('schedule-empty');
+            const logsContainer = document.getElementById('intelligence-logs-container');
+            const logsList = document.getElementById('intelligence-logs');
+
+            if (logs && logs.length > 0) {
+                logsContainer.classList.remove('hidden');
+                logsList.innerHTML = logs.map(l => `<li class="leading-relaxed mb-1">${l}</li>`).join('');
+            }
+
+            emptyState.classList.add('hidden');
+            container.classList.remove('hidden');
+
+            const currentDate = new Date();
+            const currentMin = currentDate.getHours() * 60 + currentDate.getMinutes();
+
+            container.innerHTML = blocks.map((b, index) => {
+                let cardStyle = "bg-slate-50 border-slate-200 text-slate-800";
+                let indicatorColor = "bg-slate-400";
+                let icon = "fa-solid fa-hourglass-half";
+                let badge = '<span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-[10px] font-bold">空堂</span>';
+
+                const isCurrentTask = (currentMin >= b.start && currentMin < b.end);
+
+                switch(b.category) {
+                    case 'sleep':
+                        cardStyle = "bg-slate-100/40 border-slate-200 text-slate-500";
+                        indicatorColor = "bg-slate-300";
+                        icon = "fa-solid fa-moon text-slate-400";
+                        badge = '<span class="bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded text-[9px] font-bold">生理修復</span>';
+                        break;
+                    case 'meal':
+                        cardStyle = "bg-amber-50/40 border-amber-200 text-slate-800";
+                        indicatorColor = "bg-amber-400";
+                        icon = "fa-solid fa-utensils text-amber-500";
+                        badge = '<span class="bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded text-[9px] font-bold">餐點時間</span>';
+                        break;
+                    case 'class':
+                        cardStyle = "bg-indigo-50/60 border-indigo-200 text-indigo-950";
+                        indicatorColor = "bg-indigo-600";
+                        icon = "fa-solid fa-graduation-cap text-indigo-600";
+                        badge = '<span class="bg-indigo-100 text-indigo-800 px-1.5 py-0.5 rounded text-[9px] font-bold">固定日程</span>';
+                        break;
+                    case 'focus':
+                        cardStyle = "bg-blue-50/40 border-blue-200 text-slate-800";
+                        indicatorColor = "bg-blue-500";
+                        icon = "fa-solid fa-brain text-blue-500";
+                        badge = '<span class="bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded text-[9px] font-bold">深度專注</span>';
+                        break;
+                    case 'physical':
+                        cardStyle = "bg-emerald-50/40 border-emerald-200 text-slate-800";
+                        indicatorColor = "bg-emerald-500";
+                        icon = "fa-solid fa-dumbbell text-emerald-500";
+                        badge = '<span class="bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded text-[9px] font-bold">體能活動</span>';
+                        break;
+                    case 'relax':
+                        cardStyle = "bg-purple-50/40 border-purple-200 text-slate-800";
+                        indicatorColor = "bg-purple-500";
+                        icon = "fa-solid fa-mug-hot text-purple-500";
+                        badge = '<span class="bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded text-[9px] font-bold">放鬆社團</span>';
+                        break;
+                    case 'free':
+                        cardStyle = "bg-slate-50/30 border-slate-200 text-slate-500";
+                        indicatorColor = "bg-slate-300";
+                        icon = "fa-solid fa-seedling text-slate-400";
+                        badge = '<span class="bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded text-[9px] font-bold">課間微休</span>';
+                        break;
+                }
+
+                let taskGlowClass = "";
+                let activeTaskBadge = "";
+                if (isCurrentTask) {
+                    taskGlowClass = "current-task-active ring-2 ring-rose-500/80 ring-offset-2";
+                    activeTaskBadge = `<span class="bg-rose-500 text-white px-2 py-0.5 rounded text-[10px] font-extrabold animate-pulse flex items-center gap-1"><i class="fa-solid fa-bolt"></i> 進行中</span>`;
+                }
+
+                const duration = b.end - b.start;
+                const locationMarkup = b.location ? `
+                    <div class="mt-1.5 text-[10px] text-indigo-600 font-semibold bg-white border border-indigo-100 px-2 py-0.5 rounded-md w-max">
+                        <i class="fa-solid fa-map-location-dot"></i> 地點：${b.location}
+                    </div>
+                ` : '';
+
+                // Only generate explanation boxes for activities and free-time microbreaks, NOT for meals and sleep
+                let explanationMarkup = '';
+                if (b.category !== 'sleep' && b.category !== 'meal') {
+                    if (b.category === 'free') {
+                        explanationMarkup = `
+                            <div class="mt-2.5 bg-emerald-50/50 text-emerald-950 text-[11px] leading-relaxed p-2.5 rounded-xl border border-emerald-100/40 font-sans">
+                                <span class="font-extrabold text-emerald-800"><i class="fa-solid fa-face-smile-beam"></i> 推薦休息方式：</span>
+                                <span class="text-slate-700">${b.explanation}</span>
+                            </div>
+                        `;
+                    } else if (b.category !== 'class' && b.explanation) {
+                        explanationMarkup = `
+                            <div class="mt-2.5 bg-indigo-50/60 text-indigo-950 text-[11px] leading-relaxed p-2.5 rounded-xl border border-indigo-100/40 font-sans">
+                                <span class="font-extrabold text-brand-700"><i class="fa-solid fa-lightbulb text-amber-500"></i> 排程生理理由：</span>
+                                <span class="text-slate-700">${b.explanation}</span>
+                            </div>
+                        `;
+                    }
+                }
+
+                let subtasksMarkup = '';
+                if (b.subtasks && b.subtasks.length > 0) {
+                    subtasksMarkup = `
+                        <div class="mt-3 bg-white/70 p-2.5 rounded-lg border border-slate-200/50 font-sans">
+                            <p class="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest mb-1.5">🎯 子任務任務清單：</p>
+                            <div class="space-y-1">
+                                ${b.subtasks.map((task, tid) => {
+                                    const subtaskKey = `${index}_${tid}`;
+                                    const isSubChecked = checkedSubtasks[subtaskKey] ? 'checked' : '';
+                                    return `
+                                        <div class="flex items-center space-x-2">
+                                            <input type="checkbox" id="sub-${index}-${tid}" ${isSubChecked} onchange="toggleSubtaskState(${index}, ${tid}, 'sub-${index}-${tid}')" class="rounded border-slate-300 text-brand-500 h-3 w-3 cursor-pointer">
+                                            <label for="sub-${index}-${tid}" class="text-[11px] text-slate-600 cursor-pointer select-none">${task}</label>
+                                        </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+
+                return `
+                    <div class="relative group">
+                        <!-- Left Dot -->
+                        <div class="absolute -left-[31px] sm:-left-[39px] top-2 w-4.5 h-4.5 rounded-full ${indicatorColor} border-4 border-white shadow-sm transition group-hover:scale-125"></div>
+                        
+                        <!-- Timeline Card -->
+                        <div class="border rounded-2xl p-4 sm:p-5 ${cardStyle} ${taskGlowClass} shadow-xs hover:shadow-md transition duration-200">
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-2">
+                                <span class="text-xs font-bold font-mono text-slate-500 flex items-center gap-1.5 bg-white/60 px-2.5 py-1 rounded-full border border-slate-100 w-max">
+                                    <i class="fa-regular fa-clock text-slate-400"></i> ${minToTime(b.start)} - ${minToTime(b.end)} 
+                                    <span class="text-slate-300">|</span> 
+                                    <span class="text-slate-600">${duration}m</span>
+                                </span>
+                                <div class="flex items-center space-x-1.5">${activeTaskBadge}${badge}</div>
+                            </div>
+
+                            <div class="flex items-start gap-3">
+                                <div class="p-2 bg-white rounded-xl shadow-xs border border-slate-100 mt-0.5">
+                                    <i class="${icon} text-sm"></i>
+                                </div>
+                                <div class="flex-1 font-sans">
+                                    <h4 class="text-xs sm:text-sm font-bold text-slate-900">${b.title}</h4>
+                                    ${locationMarkup}
+                                    ${explanationMarkup}
+                                    ${subtasksMarkup}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function updateStatsAndChart(blocks) {
+            let totalStudy = 0; 
+            let totalExercise = 0; 
+            let totalSleep = 0; 
+            let totalFree = 0; 
+
+            blocks.forEach(b => {
+                let durationHr = (b.end - b.start) / 60;
+                if (b.category === 'sleep') totalSleep += durationHr;
+                else if (b.category === 'class' || b.category === 'focus') totalStudy += durationHr;
+                else if (b.category === 'physical') totalExercise += durationHr;
+                else totalFree += durationHr;
+            });
+
+            document.getElementById('stat-study').innerText = `${totalStudy.toFixed(1)} 小時`;
+            document.getElementById('stat-exercise').innerText = `${totalExercise.toFixed(1)} 小時`;
+            document.getElementById('stat-sleep').innerText = `${totalSleep.toFixed(1)} 小時`;
+            document.getElementById('stat-free').innerText = `${totalFree.toFixed(1)} 小時`;
+
+            drawTimeChart(totalSleep, totalStudy, totalExercise, totalFree);
+        }
+
+        function initChart() {
+            drawTimeChart(8, 6, 1.5, 8.5);
+        }
+
+        function drawTimeChart(sleep, study, exercise, free) {
+            const ctx = document.getElementById('timeChart').getContext('2d');
+            
+            if (chartInstance) chartInstance.destroy();
+
+            chartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['🛌 睡眠', '🎓 學習/課程', '🏃 運動', '🍵 留白與生活'],
+                    datasets: [{
+                        data: [sleep, study, exercise, free],
+                        backgroundColor: ['#94a3b8', '#6366f1', '#10b981', '#cbd5e1'],
+                        borderColor: '#ffffff',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    cutout: '65%'
+                }
+            });
+        }
+
+        function copyAsText() {
+            const timeline = document.getElementById('schedule-timeline');
+            const dateStr = document.getElementById('schedule-date').value || "今日";
+            const dateObj = new Date(dateStr);
+            const dayName = dayNameMap[dateObj.getDay()] || "今日";
+
+            if (timeline.classList.contains('hidden')) {
+                openModal("提示", "目前無日程可複製。請先點擊智慧排程生成作息！");
+                return;
+            }
+
+            let text = `📅 大學生活・我的 [${dateStr} ${dayName}] 24H 智能作息表\n================================\n`;
+            computedScheduleForAI.forEach(b => {
+                const duration = b.end - b.start;
+                text += `⏰ [24H] ${minToTime(b.start)} - ${minToTime(b.end)} (${duration}m) | [${b.category.toUpperCase()}]\n📌 ${b.title}\n`;
+                if (b.explanation) {
+                    text += `💡 理由/建議：${b.explanation}\n`;
+                }
+                text += `--------------------------------\n`;
+            });
+            text += `\n✨ 由 [智編一日] 智能作息規劃器自動生成`;
+
+            const tempInput = document.createElement("textarea");
+            tempInput.value = text;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            
+            try {
+                const success = document.execCommand('copy');
+                if (success) showToast("📋 成功將緊湊作息排程複製至剪貼簿！");
+            } catch(e) {
+                openModal("手動複製", text);
+            }
+            document.body.removeChild(tempInput);
+        }
+
+        function openModal(title, body) {
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-body').innerText = body;
+            document.getElementById('info-modal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('info-modal').classList.add('hidden');
+        }
+
+        function showToast(text) {
+            const toast = document.getElementById('toast-message');
+            const toastText = document.getElementById('toast-text');
+            toastText.innerText = text;
+            toast.classList.remove('hidden');
+            setTimeout(() => { hideToast(); }, 4500);
+        }
+
+        function hideToast() {
+            document.getElementById('toast-message').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
